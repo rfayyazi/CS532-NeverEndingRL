@@ -34,7 +34,9 @@ default arguments:
 --G 1000 --N 1000 --T 20 --n_candidates 10 --sigma 0.005 --hidden_dims 64 64 --log_param False
 ```
 
-### Part 3: Do a bit of research (something new)
+### Part 3 
+
+Instructions: Do a bit of research (something new)
 
 ### Bonus
 
