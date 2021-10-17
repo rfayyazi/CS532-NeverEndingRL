@@ -123,6 +123,11 @@ def main():
 
     elite = train(args, env)
 
+    torch.save(elite, os.path.join(args.results_folder, "elite_net.pt"))
+    with open(os.path.join(args.results_folder, "args.json"), "w") as f:
+        args.wandb_run_id = wandb.run.id
+        json.dump(vars(args), f)
+
 
 if __name__ == "__main__":
     main()
