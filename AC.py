@@ -42,7 +42,7 @@ class CriticNet(nn.Module):
 
 
 def train(args, env, actor, critic):
-    for ep in tqdm(range(args.n_episodes)):
+    for ep in tqdm(range(args.N)):
         S = torch.tensor(env.reset())
         I = 1
         cumsum_reward = 0
@@ -89,21 +89,21 @@ def train(args, env, actor, critic):
         })
 
         if args.log_param:
-            wandb.log({"actor_param": actor.fc3.weight.data[0, 10].item()})
+            wandb.log({"actor-param": actor.fc3.weight.data[0, 10].item()})
 
     return actor, critic
 
 
 def get_cmd_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n_episodes", default=1000)
+    parser.add_argument("--N", default=1000)
     parser.add_argument("--gamma", default=0.97, help="discount factor")
     parser.add_argument("--actor_lr", default=0.001, help="learning rate for actor network")
     parser.add_argument("--critic_lr", default=0.001, help="learning rate for critic network")
     parser.add_argument("--actor_dims", default=[64, 64], help="list of 2 hidden dims of actor network", nargs="+")
     parser.add_argument("--critic_dims", default=[64, 64], help="list of 2 hidden dims of critic network", nargs="+")
     parser.add_argument("--log_param", default=False, help="wandb log a parameter from final layer of actor network")
-    parser.add_argument("--render", default=True)
+    parser.add_argument("--render", default=False)
     parser.add_argument("--render_step", default=1000, help="render every render_step episodes, if render True")
     return parser.parse_args()
 

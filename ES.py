@@ -4,11 +4,10 @@ import copy
 import json
 from tqdm import tqdm
 import wandb
-
+import gym
 import torch
 import torch.nn.functional as F
 from torch import nn
-import gym
 
 from utils import init_wandb, build_args
 
@@ -43,15 +42,15 @@ def get_cumsum_reward(env, policy):
 
 
 def train(args, env, policy):
-    wandb.log({"cumulative_reward": get_cumsum_reward(env, policy),
+    wandb.log({"cumulative-reward": get_cumsum_reward(env, policy),
                "generation": 0,
                "max-reward": args.max_reward})
-    Z = 1.0 / (args.n_population * args.sigma)
-    for t in tqdm(range(args.n_steps)):
+    Z = 1.0 / (args.N * args.sigma)
+    for g in tqdm(range(args.G)):
 
         theta_dims = [theta.shape for theta in policy.parameters()]
         population, noises = [], []
-        for _ in range(args.n_population):
+        for _ in range(args.N):
             population.append(copy.deepcopy(policy))
             noises.append([torch.normal(0.0, 1.0, size=shape) for shape in theta_dims])
 
@@ -68,22 +67,22 @@ def train(args, env, policy):
         for i, theta in enumerate(policy.parameters()):
             theta += args.lr * Z * theta_updates[i]
 
-        wandb.log({"cumulative_reward": get_cumsum_reward(env, policy),
-                   "generation": t+1,
+        wandb.log({"cumulative-reward": get_cumsum_reward(env, policy),
+                   "generation": g+1,
                    "max-reward": args.max_reward})
 
         if args.log_param:
-            wandb.log({"policy_param": policy.fc3.weight.data[0, 10].item()})
+            wandb.log({"policy-param": policy.fc3.weight.data[0, 10].item()})
 
     return policy
 
 
 def get_cmd_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n_steps", default=1000, help="number of evolution steps")
+    parser.add_argument("--G", default=1000, help="number of generations")
+    parser.add_argument("--N", default=100, help="population size")
     parser.add_argument("--lr", default=0.001, help="learning rate for policy network")
     parser.add_argument("--sigma", default=0.1, help="parameter noise standard deviation")
-    parser.add_argument("--n_population", default=100, help="population size")
     parser.add_argument("--hidden_dims", default=[64, 64], help="list of 2 hidden dims of policy network", nargs="+")
     parser.add_argument("--log_param", default=False, help="wandb log a parameter from final layer of actor network")
     return parser.parse_args()
