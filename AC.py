@@ -99,10 +99,10 @@ def train(args, env, actor, critic):
 
 def get_cmd_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--N", default=10000)
-    parser.add_argument("--gamma", default=0.97, help="discount factor")
-    parser.add_argument("--actor_lr", default=0.001, help="learning rate for actor network")
-    parser.add_argument("--critic_lr", default=0.001, help="learning rate for critic network")
+    parser.add_argument("--N", default=7500, type=int)
+    parser.add_argument("--gamma", default=0.97, help="discount factor", type=float)
+    parser.add_argument("--actor_lr", default=0.001, help="learning rate for actor network", type=float)
+    parser.add_argument("--critic_lr", default=0.001, help="learning rate for critic network", type=float)
     parser.add_argument("--actor_dims", default=[64, 64], help="list of 2 hidden dims of actor network", nargs="+")
     parser.add_argument("--critic_dims", default=[64, 64], help="list of 2 hidden dims of critic network", nargs="+")
     parser.add_argument("--track_param", default=False, help="wandb log a parameter from final layer of actor network")
