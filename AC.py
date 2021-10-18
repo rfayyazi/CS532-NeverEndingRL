@@ -53,7 +53,10 @@ def train(args, env, actor, critic):
             ps = actor(S)
             pi = torch.distributions.Categorical(ps)  # policy distribution
             A = pi.sample()
-            log_p = pi.log_prob(A).unsqueeze(0)  # log probability of chosen action under policy
+            log_p = pi.log_prob(A)
+            if args.track_logp:
+                wandb.log({"logp-chosen-action": log_p.item()})
+            log_p = log_p.unsqueeze(0)  # log probability of chosen action under policy
 
             S_new, R, terminal, _ = env.step(A.numpy())
             S_new = torch.tensor(S_new)
@@ -88,7 +91,7 @@ def train(args, env, actor, critic):
             "max-reward": args.max_reward
         })
 
-        if args.log_param:
+        if args.track_param:
             wandb.log({"actor-param": actor.fc3.weight.data[0, 10].item()})
 
     return actor, critic
@@ -96,14 +99,15 @@ def train(args, env, actor, critic):
 
 def get_cmd_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--N", default=1000)
+    parser.add_argument("--N", default=10000)
     parser.add_argument("--gamma", default=0.97, help="discount factor")
     parser.add_argument("--actor_lr", default=0.001, help="learning rate for actor network")
     parser.add_argument("--critic_lr", default=0.001, help="learning rate for critic network")
     parser.add_argument("--actor_dims", default=[64, 64], help="list of 2 hidden dims of actor network", nargs="+")
     parser.add_argument("--critic_dims", default=[64, 64], help="list of 2 hidden dims of critic network", nargs="+")
-    parser.add_argument("--log_param", default=False, help="wandb log a parameter from final layer of actor network")
-    parser.add_argument("--render", default=False)
+    parser.add_argument("--track_param", default=False, help="wandb log a parameter from final layer of actor network")
+    parser.add_argument("--track_logp", default=True, help="wandb log the log probability of the chosen action")
+    parser.add_argument("--render", default=False, help="render episodes during training")
     parser.add_argument("--render_step", default=1000, help="render every render_step episodes, if render True")
     return parser.parse_args()
 

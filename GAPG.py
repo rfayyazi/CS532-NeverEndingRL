@@ -28,6 +28,25 @@ class PolicyNet(nn.Module):
         return p
 
 
+def run_policy(env, policy):
+    states = []
+    actions = []
+    rewards = []
+    S = torch.tensor(env.reset())
+    states.append(S)
+    terminal = False
+    while not terminal:
+        ps = policy(S)
+        pi = torch.distributions.Categorical(ps)
+        A = pi.sample()
+        actions.append(A)
+        S, R, terminal, _ = env.step(A.numpy())
+        rewards.append(R)
+        S = torch.tensor(S)
+        states.append(S)
+    return states, actions, rewards
+
+
 def get_cumsum_reward(env, policy):
     S = torch.tensor(env.reset())
     terminal = False
@@ -42,6 +61,27 @@ def get_cumsum_reward(env, policy):
     return cumsum
 
 
+def reinforce(env, policy, gamma, lr):
+    states, actions, rewards = run_policy(env, policy)
+    T = len(actions)
+    for t in range(T):
+        G = sum([(gamma ** (k-t)) * rewards[k] for k in range(t, T)])
+        pi = torch.distributions.Categorical(policy(states[t]))  # policy distribution
+        log_p = pi.log_prob(actions[t]).unsqueeze(0)
+        policy.zero_grad()
+        log_p.backward()
+        for theta in policy.parameters():
+            theta.data += lr * (gamma**t) * G * theta.grad.data
+    return policy, sum(rewards)
+
+
+@torch.no_grad()
+def mutate_policy(policy, sigma):
+    for theta in policy.parameters():
+        theta += sigma * torch.normal(0.0, 1.0, size=theta.shape)
+    return policy
+
+
 def train(args, env):
     elite = None
     population = []
@@ -53,16 +93,17 @@ def train(args, env):
         for _ in range(args.N-1):
             if g == 0:
                 policy = PolicyNet(args.state_dim, args.hidden_dims, args.n_actions)
-                for theta in policy.parameters():
-                    theta.requires_grad = False
-                population.append(policy)
             else:
                 k = np.random.randint(args.T)
                 policy = population[k]
-                for theta in policy.parameters():
-                    theta += args.sigma * torch.normal(0.0, 1.0, size=theta.shape)
+                policy = mutate_policy(policy, args.sigma)
+
+            policy, total_reward = reinforce(env, policy, args.gamma, args.lr)
+            if g == 0:
+                population.append(policy)
+            else:
                 new_population.append(policy)
-            performance.append(get_cumsum_reward(env, policy))
+            performance.append(total_reward)
 
         if g > 0:
             population = [copy.deepcopy(policy) for policy in new_population]
@@ -108,7 +149,11 @@ def get_cmd_args():
     parser.add_argument("--T", default=20, help="truncation size")
     parser.add_argument("--n_candidates", default=10, help="how many of the best performers to consider candidates")
     parser.add_argument("--sigma", default=0.005, help="parameter mutation standard deviation")
-    parser.add_argument("--hidden_dims", default=[64, 64], help="list of 2 hidden dims of policy network", nargs="+")
+
+    parser.add_argument("--gamma", default=0.97, help="discount factor")
+    parser.add_argument("--lr", default=0.001, help="learning rate for policy networks")
+    parser.add_argument("--hidden_dims", default=[64, 64], help="list of 2 hidden dims of policy networks", nargs="+")
+
     parser.add_argument("--track_param", default=False, help="wandb log a parameter from final layer of actor network")
     return parser.parse_args()
 
@@ -118,7 +163,7 @@ def main():
 
     cmd_args = get_cmd_args()
     assert cmd_args.N > cmd_args.T, "population size (N) must be greater than truncation size (T)"
-    args = build_args("GA", cmd_args, env)
+    args = build_args("GAPG", cmd_args, env)
     os.mkdir(args.results_folder)
     init_wandb(args)
 
