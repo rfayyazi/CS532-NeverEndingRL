@@ -4,13 +4,15 @@ import copy
 import json
 from tqdm import tqdm
 import wandb
-import gym
 import numpy as np
+import time
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from utils import init_wandb, build_args
+from utils import init_wandb
+from apple_island.environment import AppleIsland
+from apple_island.agent import Agent
 
 
 class PolicyNet(nn.Module):
@@ -42,33 +44,47 @@ def get_cumsum_reward(env, policy):
     return cumsum
 
 
-def train(args, env):
+def get_performance(args, AI, population):
+    states = [torch.tensor(state) for state in AI.get_states(population)]
+    rewards = np.zeros(len(population))
+    for _ in range(args.T_episode):
+        pols = [agent.policy(states[i].float()) for i, agent in enumerate(population)]
+        pis = [torch.distributions.Categorical(pol) for pol in pols]
+        actions = [pi.sample() for pi in pis]
+        rewards += AI.transition(population, actions)
+        states = [torch.tensor(state) for state in AI.get_states(population)]
+    return rewards
+
+
+def train(args, AI):
     elite = None
     population = []
     for g in tqdm(range(args.G)):
 
         # build new population and get performance for each genotype (policy)
         new_population = []
-        performance = []
         for _ in range(args.N-1):
             if g == 0:
-                policy = PolicyNet(args.state_dim, args.hidden_dims, args.n_actions)
-                for theta in policy.parameters():
+                agent = Agent()
+                agent.policy = PolicyNet(args.state_dim, args.hidden_dims, args.n_actions)
+                for theta in agent.policy.parameters():
                     theta.requires_grad = False
-                population.append(policy)
+                population.append(agent)
             else:
                 k = np.random.randint(args.T)
-                policy = population[k]
-                for theta in policy.parameters():
+                new_agent = population[k]
+                for theta in new_agent.policy.parameters():
                     theta += args.sigma * torch.normal(0.0, 1.0, size=theta.shape)
-                new_population.append(policy)
-            performance.append(get_cumsum_reward(env, policy))
+                new_population.append(new_agent)
+            # performance.append(get_cumsum_reward(env, policy))
 
         if g > 0:
             population = [copy.deepcopy(policy) for policy in new_population]
 
+        rewards = get_performance(args, AI, population)
+
         # sort population by performance
-        order = np.argsort(performance)[::-1]
+        order = np.argsort(rewards)[::-1]
         population = [population[i] for i in order]
 
         # get candidates, i.e. best performing genotypes plus previous generation's elite
@@ -79,15 +95,15 @@ def train(args, env):
             C.append(elite)
 
         # evaluate average performance of each candidate over 30 repeats
-        candidate_performance = []
-        for c in C:
-            candidate_performance.append(sum([get_cumsum_reward(env, c) for _ in range(30)]) / 30.0)
+        candidate_performance = np.zeros(args.n_candidates)
+        for i in range(30):
+            candidate_performance += get_performance(args, AI, C)
+        candidate_performance = candidate_performance / 30
 
         # remove best candidate from population and make it elite (if it's in the population i.e. not elite)
         elite_idx = np.argmax(candidate_performance)
         wandb.log({"cumulative-reward-elite": candidate_performance[elite_idx],
-                   "generation": g + 1,
-                   "max-reward": args.max_reward})
+                   "generation": g + 1})
         if args.track_param:
             wandb.log({"elite-param": elite.fc3.weight.data[0, 10].item()})
 
@@ -103,10 +119,13 @@ def train(args, env):
 
 def get_cmd_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--D", default=10, help="dimension of Apple Island", type=int)
+    parser.add_argument("--growth_times", default=[5, 5, 5], help="apple replenishment times for 3 trees")
+    parser.add_argument("--T_episode", default=100, help="number of time steps per episode")
     parser.add_argument("--G", default=1000, help="number of generations", type=int)
-    parser.add_argument("--N", default=100, help="population size", type=int)  # 1000
-    parser.add_argument("--T", default=20, help="truncation size", type=int)
-    parser.add_argument("--n_candidates", default=10, help="num of best performers to consider candidates", type=int)
+    parser.add_argument("--N", default=10, help="population size", type=int)  # 1000
+    parser.add_argument("--T", default=7, help="truncation size", type=int)
+    parser.add_argument("--n_candidates", default=4, help="num of best performers to consider candidates", type=int)
     parser.add_argument("--sigma", default=0.005, help="parameter mutation standard deviation", type=float)
     parser.add_argument("--hidden_dims", default=[64, 64], help="list of 2 hidden dims of policy network", nargs="+")
     parser.add_argument("--track_param", default=False, help="wandb log a parameter from final layer of actor network")
@@ -114,17 +133,21 @@ def get_cmd_args():
 
 
 def main():
-    env = gym.make("CartPole-v0")
 
-    cmd_args = get_cmd_args()
-    assert cmd_args.N > cmd_args.T, "population size (N) must be greater than truncation size (T)"
-    args = build_args("GA", cmd_args, env)
+    args = get_cmd_args()
+    assert args.N > args.T, "population size (N) must be greater than truncation size (T)"
+
+    args.n_actions = 3  # [left, right, pick]
+    args.state_dim = args.D + 1  # number of agents in each grid square, plus agent's current position
+    args.exp_tag = "AI"
+    args.run_name = args.exp_tag + "-" + time.strftime("%y%m%d") + "-" + time.strftime("%H%M%S")
+    args.results_folder = os.path.join("results", args.run_name)
+
     os.mkdir(args.results_folder)
     init_wandb(args)
 
-    elite = train(args, env)
-
-    env.close()
+    AI = AppleIsland(args.D, args.growth_times)
+    elite = train(args, AI)
 
     torch.save(elite, os.path.join(args.results_folder, "elite_net.pt"))
     with open(os.path.join(args.results_folder, "args.json"), "w") as f:

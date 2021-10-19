@@ -79,10 +79,10 @@ def train(args, env, policy):
 
 def get_cmd_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--G", default=1000, help="number of generations")
-    parser.add_argument("--N", default=100, help="population size")
-    parser.add_argument("--lr", default=0.001, help="learning rate for policy network")
-    parser.add_argument("--sigma", default=0.1, help="parameter noise standard deviation")
+    parser.add_argument("--G", default=1000, help="number of generations", type=int)
+    parser.add_argument("--N", default=100, help="population size", type=int)
+    parser.add_argument("--lr", default=0.001, help="learning rate for policy network", type=float)
+    parser.add_argument("--sigma", default=0.1, help="parameter noise standard deviation", type=float)
     parser.add_argument("--hidden_dims", default=[64, 64], help="list of 2 hidden dims of policy network", nargs="+")
     parser.add_argument("--track_param", default=False, help="wandb log a parameter from final layer of actor network")
     return parser.parse_args()
