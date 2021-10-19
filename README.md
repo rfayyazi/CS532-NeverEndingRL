@@ -17,7 +17,7 @@ Run with `$ python AC.py`
 default arguments:
 
 ```bash
---N 10000 --gamma 0.97 --actor_lr 0.001 --critic_lr 0.001 --actor_dims 64 64 --critic_dims 64 64 --track_param False --track_logp True --render False --render_step 1000
+--N 7500 --gamma 0.97 --actor_lr 0.001 --critic_lr 0.001 --actor_dims 64 64 --critic_dims 64 64 --track_param False --track_logp True --render False --render_step 1000
 ```
 ### Part 2
 
@@ -31,7 +31,7 @@ Run with `$ python GA.py`
 default arguments:
 
 ```bash
---G 1000 --N 1000 --T 20 --n_candidates 10 --sigma 0.005 --hidden_dims 64 64 --track_param False
+--G 1000 --N 100 --T 20 --n_candidates 10 --sigma 0.005 --hidden_dims 64 64 --track_param False
 ```
 
 ### Part 3 
